@@ -1,0 +1,54 @@
+This README file contains the detailed description about
+the galaxy-galaxy lensing signal from SDSS DR7.
+
+Firstly, you need to Decompress gglensing.tar.gz
+using the tar command from linux system:
+
+$tar -xzvf gglensing.tar.gz
+
+In gglensing directory there are:
+
+1, LuminosityBins, containing 
+   I) lum_all subdirectory. In this directory
+      there are shear_1, shear_2, shear_3, shear4,
+      shear_5,shear_6 files, denoting measured lensing signals
+      binned in 6 luminosity bins. 
+     
+     In each file, 
+     (1).the first column is the projected
+         distance wrt the center of the group(central galaxy).
+         in comoving distance(Mpc/h); 
+     (2).the second column is the signal, 
+         a.k.a ESD(Excess Surface Density, M_sun/pc^2).
+     (3).the third column is the error estimated using bootstrap.
+     (4). The covar_1.fits,covar_2.fits, covar_3.fits, covar_4.fits 
+         ,covar_5.fits, covar_6.fits are the covariance matrix among the
+         data points also estimated via bootstrap.
+
+	The reading of fits file in IDL and python are:
+
+           IDL>covar=readfits('covar_1.fits')
+
+	   Python(pyfits library is required to be installed in advance.)
+           >> import pyfits 
+           >> hdu  =pyfits.open('covar_1.fits')
+           >> covar=hdu[0].data
+   
+   II) red_blue subdirectory contains the signal measured from
+       red and blue subsamples, which have the same structure as
+       shear_1 to shear_6 in lum_all. And the covariance matrix for each
+       luminosity bin and color are covar_r1.fits to covar_r6.fits with r
+       denoting red galaxy samples. covar_b1 to covar_b6 are for the blue galaxy
+       samples.
+2, StellarBins, containing
+   I) Sterllar_all galaxy samples binned in stellar mass. The stellar mass
+      for each galaxy is estimated using the method from Bell et al 2003.
+      From shear_1 to shear_7, the structure are the same as above for lum_all.
+      covar_1.fits to covar_7.fits are the covariance matrix in fits format.
+   II)  red_blue subsamples divided by color
+   III) sf_qu subsamples divided into star forming(sf) and quenched(qu) galaxy samples.
+
+We do not include Rachel Mandelbaum's Signal here.
+
+Wentao Luo
+Sep 1st 2015 at CMU, Pittsburgh, PA
