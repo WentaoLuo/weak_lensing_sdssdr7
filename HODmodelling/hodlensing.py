@@ -5,14 +5,18 @@ from colossus.cosmology import cosmology
 from colossus.lss import mass_function
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
-from subgen import *
+#from subgen import *
+from scipy.special import erf
+import mpmath
 
 pi = np.pi
 cosmology.setCosmology('WMAP9')
 ##################################################################################
 def paramtable():
-  # from Yang et al ApJ 2009 695:900-916 table p11
-  # logMh ranges from 12.16 to 14.58.
+  """
+  from Yang et al ApJ 2009 695:900-916 table p11
+  logMh ranges from 12.16 to 14.58.
+  """
   logMh  = np.array([12.16,12.45,12.75,13.05,13.35,13.64,13.94,14.23,14.58]) 
   phiall = np.array([0.31,0.61,1.10,1.96,3.61,6.15,9.72,16.49,24.91])
   phired = np.array([0.18,0.36,0.71,1.37,2.71,4.86,8.3,14.4,22.64])
@@ -34,9 +38,11 @@ def paramtable():
   params = {'logMh':logMh,'phi':phis,'alpha':alpha,'lgMc':lgMs,'sigs':sigs}
   return params 
 def csmfunc(theta):
-  #theta is the input for csm
-  #color=0,all; color=1,red; color=2,blue
-  #censat=0,central; censat=1,satellite
+  """
+  theta is the input for csm
+  color=0,all; color=1,red; color=2,blue
+  censat=0,central; censat=1,satellite
+  """
   logMh,color = theta
   # get the parameter table and interpolate
   params = paramtable()
@@ -47,7 +53,7 @@ def csmfunc(theta):
   sigs   = params['sigs']
   Msmin  = 7.5
   Msmax  = 12.0
-  Msx    = np.linspace(Msmin,Msmax,100)
+  Msx    = np.linspace(Msmin,Msmax,500)
   if color ==0:
       phi  = np.interp(logMh,Mhost,phi[0,:]) 
       alpha= np.interp(logMh,Mhost,alpha[0,:])
@@ -64,16 +70,58 @@ def csmfunc(theta):
       lgMc = np.interp(logMh,Mhost,lgMc[2,:]) 
       sigs = np.interp(logMh,Mhost,sigs[2,:]) 
 
-  #print phi,alpha,lgMc,sigs
-  #print Msx 
   csmfcen = (1.0/np.sqrt(2.0*pi)/sigs)*np.exp(-0.5*(Msx-lgMc)**2.0/sigs/sigs) 
-  #csmfsat = phi*(10.0**(Msx-(lgMc-0.25))**(alpha+1.0))*np.exp(-(10.0**(Msx-(lgMc-0.25)))**2.0)
   csmfsat = phi*((10.0**Msx/10.0**(lgMc-0.25))**(alpha+1.0))*np.exp(-((10.0**Msx/10.0**(lgMc-0.25)))**2.0)
   return {'Mrange':Msx,'Central':csmfcen,'Satellite':csmfsat}
 #----------------------------------------------------------------------------------
+def analyticaloccnum(theta):
+  """
+  This is the analytical form of HOD number from either CSMFunction or CLFunction
+  based on Cacciato et al 2009 MNRAS 394.
+  """
+  Msmin,Msmax,color = theta
+  params = paramtable()
+  Mhost  = params['logMh']
+  phis   = params['phi']
+  alphas = params['alpha']
+  lgMcs  = params['lgMc']
+  sigss  = params['sigs']
+
+  nbins    = 300
+  ncen     = np.zeros(nbins) 
+  nsat     = np.zeros(nbins) 
+  mbins    = np.linspace(12.17,14.5,nbins)
+  
+  for i in range(nbins):
+    logMh  = mbins[i]
+    if color ==0:
+      phi  = np.interp(logMh,Mhost,phis[0,:]) 
+      alpha= np.interp(logMh,Mhost,alphas[0,:])
+      lgMc = np.interp(logMh,Mhost,lgMcs[0,:]) 
+      sigs = np.interp(logMh,Mhost,sigss[0,:])
+    if color ==1:
+      phi  = np.interp(logMh,Mhost,phis[1,:])
+      alpha= np.interp(logMh,Mhost,alphas[1,:]) 
+      lgMc = np.interp(logMh,Mhost,lgMcs[1,:]) 
+      sigs = np.interp(logMh,Mhost,sigss[1,:]) 
+    if color ==2:
+      phi  = np.interp(logMh,Mhost,phis[2,:]) 
+      alpha= np.interp(logMh,Mhost,alphas[2,:]) 
+      lgMc = np.interp(logMh,Mhost,lgMcs[2,:]) 
+      sigs = np.interp(logMh,Mhost,sigss[2,:]) 
+
+    ncen[i]= 0.5*(erf((Msmax-lgMc))-erf(Msmin-lgMc))
+    tmp1   = 0.5*alpha+0.5
+    tmp2   = (10.0**(Msmin-(lgMc-0.25)))**2.0
+    tmp3   = (10.0**(Msmax-(lgMc-0.25)))**2.0
+    gamma1 = mpmath.gammainc(tmp1,tmp2)
+    gamma2 = mpmath.gammainc(tmp1,tmp3)
+    nsat[i]=0.5*phi*(gamma1-gamma2)
+
+  return {'Mhrange':mbins,'Occen':ncen,'Ocsat':nsat}
 def occupationnum(theta):
   Msmin,Msmax,color = theta
-  nbins    = 100
+  nbins    = 300
   ncen     = np.zeros(nbins) 
   nsat     = np.zeros(nbins) 
   mbins    = np.linspace(12.16,14.58,nbins)
@@ -84,14 +132,12 @@ def occupationnum(theta):
     msrange  = csmfuncs['Mrange']
     csmcen   = csmfuncs['Central']
     csmsat   = csmfuncs['Satellite']
-    plt.plot(msrange,csmcen,'k--',linewidth=3) 
-    plt.plot(msrange,csmsat,'k-.',linewidth=3) 
-    plt.yscale('log')
-    plt.xscale('log')
-    plt.ylim(0.1,200)
-    plt.xlim(8.0,12)
-    plt.show()
-  return 0
+    step     = (np.max(msrange)-np.min(msrange))/len(msrange)
+    ncen[i]  = step*csmcen.sum()
+    nsat[i]  = step*csmsat.sum()/10.0**step
+
+  res  = {'Mhrange':mbins,'Occen':ncen,'Ocsat':nsat}
+  return res
 def hodstats(z):
 
   modelcen = ZuMandelbaum15Cens()
@@ -116,17 +162,6 @@ def hmfunc(z):
     mbins[i]    = 10**(8+i*0.1) 
     mfunc_so[i] =mass_function.massFunction(mbins[i],z,q_in='M',q_out='dndlnM',mdef='vir',model='tinker08')
   
-  #plt.plot(mbins,mfunc_so,'k-',linewidth=3,label='Halo MassFunctio')
-  #plt.xscale('log')
-  #plt.yscale('log')
-  #plt.ylim(0.000001,100)
-  #plt.xlim(10**8,10**15)
-  #plt.xlabel(r'Mh')
-  #plt.ylabel(r'dn/dlnMh')
-  #plt.title('Diemer2017')
-  #plt.legend()
-  #plt.savefig('Diemer2017.eps')
-  #plt.show()
   return {'mbins':mbins,'hmf':mfunc_so}
 
 def PofMass(z):
@@ -171,9 +206,31 @@ def main():
   #plt.legend()
   #plt.show()
   # Tests of occupationnum-------------------------------------
-  theta = [8.0,12.0,0]
-  res   = occupationnum(theta)  
-
+  theta = [9.5,12.0,0]
+  occnmm= occupationnum(theta)  
+  occnum= analyticaloccnum(theta)  
+  comp  = hodstats(0.07)
+  mbins = comp['mbins']
+  ncc   = comp['ncen']
+  ncs   = comp['nsat']
+  mrange= occnum['Mhrange']
+  ncen  = occnum['Occen']
+  nsat  = occnum['Ocsat']
+  nccn  = occnmm['Occen']
+  nsst  = occnmm['Ocsat']
+  plt.plot(mrange,ncen,'r-.',linewidth=3,label='CSMFcen Cacciato2009')
+  plt.plot(mrange,nsat,'r-.',linewidth=3,label='CSMFsat Cacciato2009')
+  plt.plot(mrange,nccn,'b-.',linewidth=3,label='CSMFcen Yang2009')
+  plt.plot(mrange,nsst,'b-.',linewidth=3,label='CSMFsat Yang2009')
+  plt.plot(np.log10(mbins),ncc,'g:',linewidth=3,label='ZuMandelbaumCen')
+  plt.plot(np.log10(mbins),ncs,'g-.',linewidth=3,label='ZuMandelbaumSat')
+  plt.yscale('log')
+  plt.xlim(12.0,14.6)
+  plt.ylim(0.01,1000.6)
+  plt.xlabel(r'logMh',fontsize=15)
+  plt.ylabel(r'<N|Mh>',fontsize=15)
+  plt.legend()
+  plt.show()
 if __name__=='__main__':
   main()
 
